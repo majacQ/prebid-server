@@ -4,17 +4,18 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/mxmCherry/openrtb"
+	"github.com/mxmCherry/openrtb/v15/openrtb2"
+	"github.com/prebid/prebid-server/openrtb_ext"
 	"github.com/stretchr/testify/assert"
 )
 
-var request = &openrtb.BidRequest{
+var request = &openrtb2.BidRequest{
 	ID: "some-id",
-	Imp: []openrtb.Imp{
+	Imp: []openrtb2.Imp{
 		{
 			ID: "my-imp-id",
-			Banner: &openrtb.Banner{
-				Format: []openrtb.Format{
+			Banner: &openrtb2.Banner{
+				Format: []openrtb2.Format{
 					{
 						W: 300,
 						H: 600,
@@ -22,10 +23,10 @@ var request = &openrtb.BidRequest{
 				},
 			},
 			Instl: 1,
-			Ext:   json.RawMessage(`{"appnexus": {"placementId": 10433394}}`),
+			Ext:   json.RawMessage(`{"appnexus": {"placementId": 12883451}}`),
 		},
 	},
-	Device: &openrtb.Device{
+	Device: &openrtb2.Device{
 		H:   640,
 		W:   320,
 		Ext: json.RawMessage(`{"prebid": {"interstitial": {"minwidthperc": 60, "minheightperc": 60}}}`),
@@ -34,10 +35,10 @@ var request = &openrtb.BidRequest{
 
 func TestInterstitial(t *testing.T) {
 	myRequest := request
-	if err := processInterstitials(myRequest); err != nil {
+	if err := processInterstitials(&openrtb_ext.RequestWrapper{BidRequest: myRequest}); err != nil {
 		t.Fatalf("Error processing interstitials: %v", err)
 	}
-	targetFormat := []openrtb.Format{
+	targetFormat := []openrtb2.Format{
 		{
 			W: 300,
 			H: 600,

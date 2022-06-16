@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	httpCore "net/http"
+	"net/url"
 	"time"
 
 	"golang.org/x/net/context/ctxhttp"
@@ -39,7 +40,18 @@ import (
 //   "imps": {
 //     "imp1": { ... stored data for imp1 ... },
 //     "imp2": { ... stored data for imp2 ... },
+//   },
+//   "responses": {
+//     "resp1": { ... stored data for resp1 ... },
+//     "resp2": { ... stored data for resp2 ... },
 //   }
+// }
+// or
+// {
+//   "accounts": {
+//     "acc1": { ... config data for acc1 ... },
+//     "acc2": { ... config data for acc2 ... },
+//   },
 // }
 //
 // To signal deletions, the endpoint may return { "deleted": true }
@@ -80,12 +92,13 @@ func (e *HTTPEvents) fetchAll() {
 	ctx, cancel := e.ctxProducer()
 	defer cancel()
 	resp, err := ctxhttp.Get(ctx, e.client, e.Endpoint)
-	if respObj, ok := e.parse(e.Endpoint, resp, err); ok {
-		if len(respObj.StoredRequests) > 0 || len(respObj.StoredImps) > 0 {
-			e.saves <- events.Save{
-				Requests: respObj.StoredRequests,
-				Imps:     respObj.StoredImps,
-			}
+	if respObj, ok := e.parse(e.Endpoint, resp, err); ok &&
+		(len(respObj.StoredRequests) > 0 || len(respObj.StoredImps) > 0 || len(respObj.StoredResponses) > 0 || len(respObj.Accounts) > 0) {
+		e.saves <- events.Save{
+			Requests:  respObj.StoredRequests,
+			Imps:      respObj.StoredImps,
+			Responses: respObj.StoredResponses,
+			Accounts:  respObj.Accounts,
 		}
 	}
 }
@@ -95,21 +108,48 @@ func (e *HTTPEvents) refresh(ticker <-chan time.Time) {
 		select {
 		case thisTime := <-ticker:
 			thisTimeInUTC := thisTime.UTC()
-			thisEndpoint := e.Endpoint + "?last-modified=" + e.lastUpdate.Format(time.RFC3339)
+
+			// Parse the endpoint url defined
+			endpointUrl, urlErr := url.Parse(e.Endpoint)
+
+			// Error with url parsing
+			if urlErr != nil {
+				glog.Errorf("Disabling refresh HTTP cache from GET '%s': %v", e.Endpoint, urlErr)
+				return
+			}
+
+			// Parse the url query string
+			urlQuery := endpointUrl.Query()
+
+			// See the last-modified query param
+			urlQuery.Set("last-modified", e.lastUpdate.Format(time.RFC3339))
+
+			// Rebuild
+			endpointUrl.RawQuery = urlQuery.Encode()
+
+			// Convert to string
+			endpoint := endpointUrl.String()
+
+			glog.Infof("Refreshing HTTP cache from GET '%s'", endpoint)
+
 			ctx, cancel := e.ctxProducer()
-			resp, err := ctxhttp.Get(ctx, e.client, e.Endpoint)
-			if respObj, ok := e.parse(thisEndpoint, resp, err); ok {
+			resp, err := ctxhttp.Get(ctx, e.client, endpoint)
+			if respObj, ok := e.parse(endpoint, resp, err); ok {
 				invalidations := events.Invalidation{
-					Requests: extractInvalidations(respObj.StoredRequests),
-					Imps:     extractInvalidations(respObj.StoredImps),
+					Requests:  extractInvalidations(respObj.StoredRequests),
+					Imps:      extractInvalidations(respObj.StoredImps),
+					Responses: extractInvalidations(respObj.StoredResponses),
+					Accounts:  extractInvalidations(respObj.Accounts),
 				}
-				if len(respObj.StoredRequests) > 0 || len(respObj.StoredImps) > 0 {
+				if len(respObj.StoredRequests) > 0 || len(respObj.StoredImps) > 0 || len(respObj.StoredResponses) > 0 || len(respObj.Accounts) > 0 {
 					e.saves <- events.Save{
-						Requests: respObj.StoredRequests,
-						Imps:     respObj.StoredImps,
+						Requests:  respObj.StoredRequests,
+						Imps:      respObj.StoredImps,
+						Responses: respObj.StoredResponses,
+						Accounts:  respObj.Accounts,
 					}
 				}
-				if len(invalidations.Requests) > 0 || len(invalidations.Imps) > 0 {
+				if len(invalidations.Requests) > 0 || len(invalidations.Imps) > 0 || len(invalidations.Responses) > 0 || len(invalidations.Accounts) > 0 {
 					e.invalidations <- invalidations
 				}
 				e.lastUpdate = thisTimeInUTC
@@ -119,7 +159,7 @@ func (e *HTTPEvents) refresh(ticker <-chan time.Time) {
 	}
 }
 
-// proceess unpacks the HTTP response and sends the relevant events to the channels.
+// parse unpacks the HTTP response and sends the relevant events to the channels.
 // It returns true if everything was successful, and false if any errors occurred.
 func (e *HTTPEvents) parse(endpoint string, resp *httpCore.Response, err error) (*responseContract, bool) {
 	if err != nil {
@@ -168,6 +208,8 @@ func (e *HTTPEvents) Invalidations() <-chan events.Invalidation {
 }
 
 type responseContract struct {
-	StoredRequests map[string]json.RawMessage `json:"requests"`
-	StoredImps     map[string]json.RawMessage `json:"imps"`
+	StoredRequests  map[string]json.RawMessage `json:"requests"`
+	StoredImps      map[string]json.RawMessage `json:"imps"`
+	StoredResponses map[string]json.RawMessage `json:"responses"`
+	Accounts        map[string]json.RawMessage `json:"accounts"`
 }

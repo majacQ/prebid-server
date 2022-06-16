@@ -1,0 +1,17 @@
+maintainer:
+  email: "josh@lunamedia.io"
+capabilities:
+  site:
+    mediaTypes:
+    - banner
+    - video
+    
+  app:
+    mediaTypes:
+    - banner
+    - video
+userSync:
+  iframe:
+    url: "https://api.lunamedia.io/xp/user-sync?redirect={{.RedirectURL}}"
+    userMacro: "$UID"
+

@@ -1,0 +1,15 @@
+maintainer:
+  email: "eng-demand@imds.tv"
+capabilities:
+  app:
+    mediaTypes:
+      - banner
+      - video
+  site:
+    mediaTypes:
+      - banner
+      - video
+userSync:
+  iframe:
+    url: "https://ad-cdn.technoratimedia.com/html/usersync.html?cb={{.RedirectURL}}"
+    userMacro: "[USER_ID]"

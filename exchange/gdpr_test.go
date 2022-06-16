@@ -4,133 +4,114 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/mxmCherry/openrtb"
+	"github.com/mxmCherry/openrtb/v15/openrtb2"
+	"github.com/prebid/prebid-server/gdpr"
 	"github.com/stretchr/testify/assert"
 )
 
-func TestExtractGDPRFound(t *testing.T) {
-	gdprTest := openrtb.BidRequest{
-		User: &openrtb.User{
-			Ext: json.RawMessage(`{"consent": "BOS2bx5OS2bx5ABABBAAABoAAAAAFA"}`),
+func TestExtractGDPR(t *testing.T) {
+	tests := []struct {
+		description string
+		giveRegs    *openrtb2.Regs
+		wantGDPR    gdpr.Signal
+		wantError   bool
+	}{
+		{
+			description: "Regs Ext GDPR = 0",
+			giveRegs:    &openrtb2.Regs{Ext: json.RawMessage(`{"gdpr": 0}`)},
+			wantGDPR:    gdpr.SignalNo,
 		},
-		Regs: &openrtb.Regs{
-			Ext: json.RawMessage(`{"gdpr": 1}`),
+		{
+			description: "Regs Ext GDPR = 1",
+			giveRegs:    &openrtb2.Regs{Ext: json.RawMessage(`{"gdpr": 1}`)},
+			wantGDPR:    gdpr.SignalYes,
 		},
-	}
-	gdpr := extractGDPR(&gdprTest, false)
-	consent := extractConsent(&gdprTest)
-	assert.Equal(t, 1, gdpr)
-	assert.Equal(t, "BOS2bx5OS2bx5ABABBAAABoAAAAAFA", consent)
-
-	gdprTest.Regs.Ext = json.RawMessage(`{"gdpr": 0}`)
-	gdpr = extractGDPR(&gdprTest, true)
-	consent = extractConsent(&gdprTest)
-	assert.Equal(t, 0, gdpr)
-	assert.Equal(t, "BOS2bx5OS2bx5ABABBAAABoAAAAAFA", consent)
-}
-
-func TestGDPRUnknown(t *testing.T) {
-	gdprTest := openrtb.BidRequest{}
-
-	gdpr := extractGDPR(&gdprTest, false)
-	consent := extractConsent(&gdprTest)
-	assert.Equal(t, 1, gdpr)
-	assert.Equal(t, "", consent)
-
-	gdpr = extractGDPR(&gdprTest, true)
-	consent = extractConsent(&gdprTest)
-	assert.Equal(t, 0, gdpr)
-
-}
-
-func TestCleanPI(t *testing.T) {
-	bidReqOrig := openrtb.BidRequest{}
-
-	bidReqCopy := bidReqOrig
-	// Make sure cleanIP handles the empty case
-	cleanPI(&bidReqCopy, false)
-
-	// Add values to clean
-	bidReqOrig.User = &openrtb.User{
-		BuyerUID: "abc123",
-	}
-	bidReqOrig.Device = &openrtb.Device{
-		DIDMD5: "teapot",
-		IP:     "12.123.56.128",
-		IPv6:   "2001:0db8:85a3:0000:0000:8a2e:0370:7334",
-		Geo: &openrtb.Geo{
-			Lat: 123.4567,
-			Lon: 7.9836,
+		{
+			description: "Regs Ext GDPR = null",
+			giveRegs:    &openrtb2.Regs{Ext: json.RawMessage(`{"gdpr": null}`)},
+			wantGDPR:    gdpr.SignalAmbiguous,
+		},
+		{
+			description: "Regs is nil",
+			giveRegs:    nil,
+			wantGDPR:    gdpr.SignalAmbiguous,
+		},
+		{
+			description: "Regs Ext is nil",
+			giveRegs:    &openrtb2.Regs{Ext: nil},
+			wantGDPR:    gdpr.SignalAmbiguous,
+		},
+		{
+			description: "JSON unmarshal error",
+			giveRegs:    &openrtb2.Regs{Ext: json.RawMessage(`{"`)},
+			wantGDPR:    gdpr.SignalAmbiguous,
+			wantError:   true,
 		},
 	}
-	// Make a shallow copy
-	bidReqCopy = bidReqOrig
 
-	cleanPI(&bidReqCopy, false)
+	for _, tt := range tests {
+		bidReq := openrtb2.BidRequest{
+			Regs: tt.giveRegs,
+		}
 
-	// Verify cleaned values
-	assertStringEmpty(t, bidReqCopy.User.BuyerUID)
-	assertStringEmpty(t, bidReqCopy.Device.DIDMD5)
-	assert.Equal(t, "12.123.56.0", bidReqCopy.Device.IP)
-	assert.Equal(t, "2001:0db8:85a3:0000:0000:8a2e:0370:0000", bidReqCopy.Device.IPv6)
-	assert.Equal(t, 123.46, bidReqCopy.Device.Geo.Lat)
-	assert.Equal(t, 7.98, bidReqCopy.Device.Geo.Lon)
+		result, err := extractGDPR(&bidReq)
+		assert.Equal(t, tt.wantGDPR, result, tt.description)
 
-	// verify original untouched, as we want to only modify the cleaned copy for the bidder
-	assert.Equal(t, "abc123", bidReqOrig.User.BuyerUID)
-	assert.Equal(t, "teapot", bidReqOrig.Device.DIDMD5)
-	assert.Equal(t, "12.123.56.128", bidReqOrig.Device.IP)
-	assert.Equal(t, "2001:0db8:85a3:0000:0000:8a2e:0370:7334", bidReqOrig.Device.IPv6)
-	assert.Equal(t, 123.4567, bidReqOrig.Device.Geo.Lat)
-	assert.Equal(t, 7.9836, bidReqOrig.Device.Geo.Lon)
-
+		if tt.wantError {
+			assert.NotNil(t, err, tt.description)
+		} else {
+			assert.Nil(t, err, tt.description)
+		}
+	}
 }
 
-func TestCleanPIAmp(t *testing.T) {
-	bidReqOrig := openrtb.BidRequest{}
-
-	bidReqCopy := bidReqOrig
-	// Make sure cleanIP handles the empty case
-	cleanPI(&bidReqCopy, false)
-
-	// Add values to clean
-	bidReqOrig.User = &openrtb.User{
-		BuyerUID: "abc123",
-	}
-	bidReqOrig.Device = &openrtb.Device{
-		DIDMD5: "teapot",
-		IP:     "12.123.56.128",
-		IPv6:   "2001:0db8:85a3:0000:0000:8a2e:0370:7334",
-		Geo: &openrtb.Geo{
-			Lat: 123.4567,
-			Lon: 7.9836,
+func TestExtractConsent(t *testing.T) {
+	tests := []struct {
+		description string
+		giveUser    *openrtb2.User
+		wantConsent string
+		wantError   bool
+	}{
+		{
+			description: "User Ext Consent is not empty",
+			giveUser:    &openrtb2.User{Ext: json.RawMessage(`{"consent": "BOS2bx5OS2bx5ABABBAAABoAAAAAFA"}`)},
+			wantConsent: "BOS2bx5OS2bx5ABABBAAABoAAAAAFA",
+		},
+		{
+			description: "User Ext Consent is empty",
+			giveUser:    &openrtb2.User{Ext: json.RawMessage(`{"consent": ""}`)},
+			wantConsent: "",
+		},
+		{
+			description: "User Ext is nil",
+			giveUser:    &openrtb2.User{Ext: nil},
+			wantConsent: "",
+		},
+		{
+			description: "User is nil",
+			giveUser:    nil,
+			wantConsent: "",
+		},
+		{
+			description: "JSON unmarshal error",
+			giveUser:    &openrtb2.User{Ext: json.RawMessage(`{`)},
+			wantConsent: "",
+			wantError:   true,
 		},
 	}
-	// Make a shallow copy
-	bidReqCopy = bidReqOrig
 
-	cleanPI(&bidReqCopy, true)
+	for _, tt := range tests {
+		bidReq := openrtb2.BidRequest{
+			User: tt.giveUser,
+		}
 
-	// Verify cleaned values
-	assert.Equal(t, "abc123", bidReqCopy.User.BuyerUID)
-	assertStringEmpty(t, bidReqCopy.Device.DIDMD5)
-	assert.Equal(t, "12.123.56.0", bidReqCopy.Device.IP)
-	assert.Equal(t, "2001:0db8:85a3:0000:0000:8a2e:0370:0000", bidReqCopy.Device.IPv6)
-	assert.Equal(t, 123.46, bidReqCopy.Device.Geo.Lat)
-	assert.Equal(t, 7.98, bidReqCopy.Device.Geo.Lon)
-}
+		result, err := extractConsent(&bidReq)
+		assert.Equal(t, tt.wantConsent, result, tt.description)
 
-func assertStringEmpty(t *testing.T, str string) {
-	t.Helper()
-	if str != "" {
-		t.Errorf("Expected an empty string, got %s", str)
+		if tt.wantError {
+			assert.NotNil(t, err, tt.description)
+		} else {
+			assert.Nil(t, err, tt.description)
+		}
 	}
-}
-
-func TestBadIPs(t *testing.T) {
-	assertStringEmpty(t, cleanIP("not an IP"))
-	assertStringEmpty(t, cleanIP(""))
-	assertStringEmpty(t, cleanIP("36278042"))
-	assertStringEmpty(t, cleanIPv6("not an IP"))
-	assertStringEmpty(t, cleanIPv6(""))
 }

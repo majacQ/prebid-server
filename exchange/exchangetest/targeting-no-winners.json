@@ -120,10 +120,13 @@
             "h": 250,
             "crid": "creative-4",
             "ext": {
+              "origbidcpm": 0.51,
               "prebid": {
                 "type": "video",
                 "targeting": {
                   "hb_bidder_audienceNe": "audienceNetwork",
+                  "hb_cache_host_audien": "www.pbcserver.com",
+                  "hb_cache_path_audien": "/pbcache/endpoint",
                   "hb_pb_audienceNetwor": "0.50",
                   "hb_size_audienceNetw": "200x250"
                 }
@@ -141,10 +144,13 @@
             "h": 250,
             "crid": "creative-1",
             "ext": {
+              "origbidcpm": 0.71,
               "prebid": {
                 "type": "video",
                 "targeting": {
                   "hb_bidder_appnexus": "appnexus",
+                  "hb_cache_host_appnex": "www.pbcserver.com",
+                  "hb_cache_path_appnex": "/pbcache/endpoint",
                   "hb_pb_appnexus": "0.70",
                   "hb_size_appnexus": "200x250"
                 }
@@ -159,6 +165,7 @@
             "h": 250,
             "crid": "creative-2",
             "ext": {
+              "origbidcpm": 0.21,
               "prebid": {
                 "type": "video"
               }
@@ -172,10 +179,13 @@
             "h": 500,
             "crid": "creative-3",
             "ext": {
+              "origbidcpm": 0.61,
               "prebid": {
                 "type": "video",
                 "targeting": {
                   "hb_bidder_appnexus": "appnexus",
+                  "hb_cache_host_appnex": "www.pbcserver.com",
+                  "hb_cache_path_appnex": "/pbcache/endpoint",
                   "hb_pb_appnexus": "0.60",
                   "hb_size_appnexus": "300x500"
                 }
